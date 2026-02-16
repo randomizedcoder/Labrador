@@ -435,7 +435,7 @@ void MainWindow::initialisePlot()
     ui->scopeAxes->addItem(fSpaceLabel);
     fSpaceLabel->setPositionAlignment(Qt::AlignTop|Qt::AlignRight);
     fSpaceLabel->position->setType(QCPItemPosition::ptAxisRectRatio);
-    fSpaceLabel->position->setCoords(1.00, 1.04); // place position at center/top of axis rect
+    fSpaceLabel->position->setCoords(1.00, 1.04); 
     fSpaceLabel->setTextAlignment(Qt::AlignBottom|Qt::AlignRight);
     fSpaceLabel->setText("Cursor Label Here");
     fSpaceLabel->setClipToAxisRect(false);
@@ -444,6 +444,34 @@ void MainWindow::initialisePlot()
     fSpaceLabel->setPen(QPen(Qt::white));
     fSpaceLabel->setBrush(QBrush(Qt::black));
     fSpaceLabel->setVisible(false);
+
+    auto freqRespStatusLabel = new QCPItemText(ui->scopeAxes);
+    ui->scopeAxes->addItem(fSpaceLabel);
+    freqRespStatusLabel->setPositionAlignment(Qt::AlignVCenter|Qt::AlignRight);
+    freqRespStatusLabel->position->setType(QCPItemPosition::ptAxisRectRatio);
+    freqRespStatusLabel->position->setCoords(0.05, 1.06); 
+    freqRespStatusLabel->setTextAlignment(Qt::AlignVCenter|Qt::AlignRight);
+    freqRespStatusLabel->setText("Status:");
+    freqRespStatusLabel->setClipToAxisRect(false);
+    freqRespStatusLabel->setFont(labelFont);
+    freqRespStatusLabel->setColor(Qt::white);
+    freqRespStatusLabel->setBrush(QBrush(Qt::black));
+    freqRespStatusLabel->setVisible(false);
+
+    QFont markFont = QFont(labelFont);
+    markFont.setPointSize(24);
+    auto freqRespStatusMark = new QCPItemText(ui->scopeAxes);
+    ui->scopeAxes->addItem(fSpaceLabel);
+    freqRespStatusMark->setPositionAlignment(Qt::AlignVCenter|Qt::AlignLeft);
+    freqRespStatusMark->position->setType(QCPItemPosition::ptAxisRectRatio);
+    freqRespStatusMark->position->setCoords(0.06, 1.055); 
+    freqRespStatusMark->setTextAlignment(Qt::AlignVCenter|Qt::AlignLeft);
+    freqRespStatusMark->setText("Mark Here");
+    freqRespStatusMark->setClipToAxisRect(false);
+    freqRespStatusMark->setFont(markFont);
+    freqRespStatusMark->setColor(Qt::white);
+    freqRespStatusMark->setBrush(QBrush(Qt::black));
+    freqRespStatusMark->setVisible(false);
 
     auto triggerFrequencyLabel = new QCPItemText(ui->scopeAxes);
     ui->scopeAxes->addItem(triggerFrequencyLabel);
@@ -462,6 +490,9 @@ void MainWindow::initialisePlot()
     ui->controller_iso->cursorLabel = cursorLabel;
     ui->controller_iso->triggerFrequencyLabel = triggerFrequencyLabel;
     ui->controller_iso->fSpaceLabel = fSpaceLabel;
+    ui->controller_iso->freqRespStatusLabel = freqRespStatusLabel;
+    ui->controller_iso->freqRespStatusMark = freqRespStatusMark;
+
 
     ui->scopeAxes->yAxis->setAutoTickCount(9);
     ui->scopeAxes->xAxis->setAutoTickCount(9);
@@ -1875,12 +1906,12 @@ void MainWindow::vertScaleEvent(bool enabled){
 
 void MainWindow::on_actionCalibrate_triggered()
 {
-    dt_userWantsToCalibrate = true; // in case triggered from the menu option
     //Must be mode 4
     //Must be DC coupled
     //Voltage must be disconnected
     caibrateStage = 0;
 
+    int choice;
     if(!ui->controller_iso->driver->connected){
         calibrationMessages = new QMessageBox();
         calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
@@ -1892,9 +1923,10 @@ void MainWindow::on_actionCalibrate_triggered()
     if(ui->controller_iso->driver->deviceMode!=4){
         calibrationMessages = new QMessageBox();
         calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+        connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
         calibrationMessages->setStandardButtons(QMessageBox::Ok|QMessageBox::Cancel);
         calibrationMessages->setText("The calibration sequence requires all devices to be turned off, except for the oscilloscope CH1 and CH2.  Is it OK for me to change your workspace?");
-        int choice = calibrationMessages->exec();
+        choice = calibrationMessages->exec();
         if(choice == QMessageBox::Ok){
             qDebug() << "Changing workspace...";
             ui->psuSlider->setValue(0);
@@ -1937,9 +1969,12 @@ void MainWindow::on_actionCalibrate_triggered()
     qDebug() << "Calibration routine beginning!";
     calibrationMessages = new QMessageBox();
     calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+    connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
     calibrationMessages->setStandardButtons(QMessageBox::Ok);
     calibrationMessages->setText("Please disconnect all wires from your Labrador board then press OK to continue.");
-    calibrationMessages->exec();
+    choice = calibrationMessages->exec();
+    if(choice == QDialog::Rejected)
+        return;
 
     ui->controller_iso->clearBuffers(1,1,1);
     QTimer::singleShot(1200, this, SLOT(calibrateStage2()));
@@ -1954,6 +1989,7 @@ void MainWindow::calibrateStage2(){
     if((vref_CH1 > 2.1) | (vref_CH1 < 1.1) | (vref_CH2 > 2.1) | (vref_CH2 < 1.1)){
         calibrationMessages = new QMessageBox();
         calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+        connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
         calibrationMessages->setStandardButtons(QMessageBox::Ok);
         calibrationMessages->setText("Calibration has been abandoned due to out-of-range values.  Both channels should show approximately 1.6V.  Please disconnect all wires from your Labrador board and try again.");
         calibrationMessages->exec();
@@ -1972,9 +2008,12 @@ void MainWindow::calibrateStage2(){
 
     calibrationMessages = new QMessageBox();
     calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+    connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
     calibrationMessages->setStandardButtons(QMessageBox::Ok);
     calibrationMessages->setText("Please connect both oscilloscope channels to the outer shield of the USB connector then press OK to continue.");
-    calibrationMessages->exec();
+    int choice = calibrationMessages->exec();
+    if(choice == QDialog::Rejected)
+        return;
 
     ui->controller_iso->clearBuffers(1,1,1);
     QTimer::singleShot(1200, this, SLOT(calibrateStage3()));
@@ -1990,6 +2029,7 @@ void MainWindow::calibrateStage3(){
     if((vMeasured_CH1 > 0.3) | (vMeasured_CH1 < -0.3) | (vMeasured_CH2 > 0.3) | (vMeasured_CH2 < -0.3)){
         calibrationMessages = new QMessageBox();
         calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+        connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
         calibrationMessages->setStandardButtons(QMessageBox::Ok);
         calibrationMessages->setText("Calibration has been abandoned due to out-of-range values.  Both channels should show approximately 0V.  Please try again.");
         calibrationMessages->exec();
@@ -2012,9 +2052,12 @@ void MainWindow::calibrateStage3(){
     settings->setValue("CalibrateGainCH2", ui->controller_iso->frontendGain_CH2);
     calibrationMessages = new QMessageBox();
     calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+    connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
     calibrationMessages->setStandardButtons(QMessageBox::Ok);
     calibrationMessages->setText("Oscilloscope Calibration complete.");
-    calibrationMessages->exec();
+    int choice = calibrationMessages->exec();
+    if(choice == QDialog::Rejected)
+        return;
 
     if (dt_userWantsToCalibrate)
         on_actionCalibrate_2_triggered();
@@ -2415,6 +2458,7 @@ void MainWindow::on_actionCalibrate_2_triggered()
 
     calibrationMessages = new QMessageBox();
     calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+    connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
     if (!ui->controller_iso->driver->connected) {
         calibrationMessages->setStandardButtons(QMessageBox::Ok);
         calibrationMessages->setText("You need to connect the board before calibrating it!");
@@ -2434,7 +2478,7 @@ void MainWindow::on_actionCalibrate_2_triggered()
     calibrationMessages->setStandardButtons(QMessageBox::Ok|QMessageBox::Cancel);
     calibrationMessages->setText("Power Supply calibration requires me to control your power supply temporarily.  \n\nTO PREVENT BLUE SMOKE DAMAGE, DISCONNECT ANY CIRCUIT ATTACHED TO YOUR POWER SUPPLY NOW.");
     int choice = calibrationMessages->exec();
-    if (choice == QMessageBox::Cancel) {
+    if (choice == QMessageBox::Cancel || choice == QDialog::Rejected) {
         return;
     }
 
@@ -2469,9 +2513,12 @@ void MainWindow::on_actionCalibrate_2_triggered()
     qDebug() << "PSU Calibration routine beginning!";
     calibrationMessages = new QMessageBox();
     calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+    connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
     calibrationMessages->setStandardButtons(QMessageBox::Ok);
     calibrationMessages->setText("Please connect your Labrador's Oscilloscope CH1 (DC) pin to the Power Supply Output (positive) then press OK to continue.");
-    calibrationMessages->exec();
+    choice = calibrationMessages->exec();
+    if(choice == QDialog::Rejected)
+        return;
 
     ui->controller_iso->driver->setPsu(5);
     ui->controller_iso->clearBuffers(1,1,1);
@@ -2490,6 +2537,7 @@ void MainWindow::calibrate_psu_stage2()
         ui->controller_iso->autoGain();
         calibrationMessages = new QMessageBox();
         calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+        connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
         calibrationMessages->setStandardButtons(QMessageBox::Ok);
         calibrationMessages->setText("Calibration has been abandoned due to out-of-range values.  The oscilloscope should show approximately 5V.  Please check all wires on your Labrador board and try again.");
         calibrationMessages->exec();
@@ -2515,6 +2563,7 @@ void MainWindow::calibrate_psu_stage3()
     if((PSU10 > 12) | (PSU10 < 8) ){
         calibrationMessages = new QMessageBox();
         calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+        connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
         calibrationMessages->setStandardButtons(QMessageBox::Ok);
         calibrationMessages->setText("Calibration has been abandoned due to out-of-range values.  The oscilloscope should show approximately 10V.  Please check all wires on your Labrador board and try again.");
         calibrationMessages->exec();
@@ -2527,6 +2576,7 @@ void MainWindow::calibrate_psu_stage3()
 
     calibrationMessages = new QMessageBox();
     calibrationMessages->setAttribute(Qt::WA_DeleteOnClose);
+    connect(ui->controller_iso->driver, SIGNAL(killMe()), calibrationMessages, SLOT(reject()));
     calibrationMessages->setStandardButtons(QMessageBox::Ok);
     calibrationMessages->setText("PSU calibration complete.");
     calibrationMessages->exec();
@@ -2760,6 +2810,8 @@ void MainWindow::on_actionFrequency_Spectrum_triggered(bool checked)
         ui->cursorHoriCheck->setChecked(ui->controller_iso->horiCursorEnabled1);
         ui->cursorVertCheck->setChecked(ui->controller_iso->vertCursorEnabled1);
         ui->controller_iso->retickXAxis();
+        ui->controller_iso->freqRespStatusMark->setVisible(false);
+        ui->controller_iso->freqRespStatusLabel->setVisible(false);
     }else{
         ui->cursorHoriCheck->setChecked(ui->controller_iso->horiCursorEnabled0);
         ui->cursorVertCheck->setChecked(ui->controller_iso->vertCursorEnabled0);
@@ -2798,6 +2850,9 @@ void MainWindow::on_actionFrequency_Response_triggered(bool checked)
         ui->busSnifferGroup_CH2->setChecked(false);
         ui->scopeGroup_CH1->setChecked(true);
         ui->scopeGroup_CH2->setChecked(true);
+
+        if(ui->amplitudeValue_CH1->value() < 0.5)
+            QMessageBox::information(nullptr, "Notice", "Try increasing the amplitude of Signal Gen CH1 if the Frequency Response tool appears unresponsive.");
     }
     ui->scopeGroup_CH1->setCheckable(!checked);
     ui->scopeGroup_CH2->setCheckable(!checked);
@@ -2808,10 +2863,14 @@ void MainWindow::on_actionFrequency_Response_triggered(bool checked)
         ui->cursorHoriCheck->setChecked(ui->controller_iso->horiCursorEnabled2);
         ui->cursorVertCheck->setChecked(ui->controller_iso->vertCursorEnabled2);
         ui->controller_iso->retickXAxis();
+        ui->controller_iso->freqRespStatusLabel->setVisible(true);
+        ui->controller_iso->freqRespStatusMark->setVisible(true);
     }else{
         ui->cursorHoriCheck->setChecked(ui->controller_iso->horiCursorEnabled0);
         ui->cursorVertCheck->setChecked(ui->controller_iso->vertCursorEnabled0);
         ui->controller_iso->fSpaceLabel->setVisible(false);
+        ui->controller_iso->freqRespStatusLabel->setVisible(false);
+        ui->controller_iso->freqRespStatusMark->setVisible(false);
         ui->scopeAxes->xAxis->setScaleType(QCPAxis::stLinear);
 
         ui->scopeAxes->xAxis->setNumberPrecision(defaultNumberPrecision);
@@ -2839,6 +2898,10 @@ void MainWindow::on_actionEye_Diagram_triggered(bool checked)
         freqRespLayout1Widget->setVisible(false);
         freqRespLayout2Widget->setVisible(false);
         ui->actionFrequency_Response->setChecked(false);
+
+        ui->controller_iso->freqRespStatusMark->setVisible(false);
+        ui->controller_iso->freqRespStatusLabel->setVisible(false);
+        ui->controller_iso->fSpaceLabel->setVisible(false);
     }
 
     ui->scopeGroup_CH2->setDisabled(false);
